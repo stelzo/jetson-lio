@@ -63,6 +63,41 @@
 ### 1.1 **Ubuntu** and **ROS**
 **Ubuntu >= 16.04**
 
+### TBB
+
+fast_lio is accelerated with the oneTBB library for multithreading.
+
+
+```bash
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt install gcc-11 g++-11
+
+sudo unlink /usr/bin/cc
+sudo unlink /usr/bin/gcc
+sudo unlink /usr/bin/g++
+sudo unlink /usr/bin/c++
+
+sudo ln -s /usr/bin/gcc-11 /usr/bin/gcc
+sudo ln -s /usr/bin/gcc-11 /usr/bin/cc
+sudo ln -s /usr/bin/g++-11 /usr/bin/g++
+sudo ln -s /usr/bin/g++-11 /usr/bin/c++
+```
+
+```bash
+git clone https://github.com/oneapi-src/oneTBB
+cd oneTBB
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DTBB_TEST=false -DTBB_EXAMPLES=false ..
+sudo make install -j`nproc`
+```
+
+If TBB does not compile with gcc-11, use gcc-10 for TBB and build fast_lio with gcc-11 again. 
+
+Then build fast_lio. For ~1ms faster (with ~30mins build time), compile with `-DFLYSENSE_OPT=On`.
+```bash
+ catkin build fast_lio --cmake-args -DFLYSENSE_OPT=On
+```
+
 For **Ubuntu 18.04 or higher**, the **default** PCL and Eigen is enough for FAST-LIO to work normally.
 
 ROS    >= Melodic. [ROS Installation](http://wiki.ros.org/ROS/Installation)

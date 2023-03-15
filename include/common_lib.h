@@ -5,8 +5,9 @@
 #include <Eigen/Eigen>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
-#include <fast_lio/Pose6D.h>
+#include <jetson_lio/Pose6D.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <eigen_conversions/eigen_msg.h>
@@ -33,7 +34,7 @@ using namespace Eigen;
 #define STD_VEC_FROM_EIGEN(mat)  vector<decltype(mat)::Scalar> (mat.data(), mat.data() + mat.rows() * mat.cols())
 #define DEBUG_FILE_DIR(name)     (string(string(ROOT_DIR) + "Log/"+ name))
 
-typedef fast_lio::Pose6D Pose6D;
+typedef jetson_lio::Pose6D Pose6D;
 typedef pcl::PointXYZINormal PointType;
 typedef pcl::PointCloud<PointType> PointCloudXYZI;
 typedef vector<PointType, Eigen::aligned_allocator<PointType>>  PointVector;
@@ -62,6 +63,7 @@ struct MeasureGroup     // Lidar data and imu dates for the curent process
     double lidar_beg_time;
     double lidar_end_time;
     PointCloudXYZI::Ptr lidar;
+    sensor_msgs::PointCloud2::Ptr raw_lidar;
     deque<sensor_msgs::Imu::ConstPtr> imu;
 };
 
@@ -222,6 +224,19 @@ float calc_dist(PointType p1, PointType p2){
     return d;
 }
 
+/**
+ * @brief estimate the plane equation
+ * @param pca_result: the plane equation
+ * @param point: the point cloud
+ * @param threshold: the threshold of the distance between the point and the plane
+ * @return true if the plane equation is estimated successfully
+ * @note the plane equation: Ax + By + Cz + D = 0
+ *      convert to: A/D*x + B/D*y + C/D*z = -1
+ *     solve: A0*x0 = b0
+ *    where A0_i = [x_i, y_i, z_i], x0 = [A/D, B/D, C/D]^T, b0 = [-1, ..., -1]^T
+ *   normvec:  normalized x0
+*/
+
 template<typename T>
 bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &threshold)
 {
@@ -248,7 +263,9 @@ bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &
 
     for (int j = 0; j < NUM_MATCH_POINTS; j++)
     {
-        if (fabs(pca_result(0) * point[j].x + pca_result(1) * point[j].y + pca_result(2) * point[j].z + pca_result(3)) > threshold)
+        float to_check = fabs(pca_result(0) * point[j].x + pca_result(1) * point[j].y + pca_result(2) * point[j].z + pca_result(3));
+        std::cout << "to_check: " << to_check << std::endl;
+        if (to_check > threshold)
         {
             return false;
         }

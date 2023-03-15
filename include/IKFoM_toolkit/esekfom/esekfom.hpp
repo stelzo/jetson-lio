@@ -51,6 +51,7 @@
 #include "../mtk/startIdx.hpp"
 #include "../mtk/build_manifold.hpp"
 #include "util.hpp"
+#include <omp.h>
 
 //#define USE_sparse
 
