@@ -197,13 +197,11 @@ void ros_ouster_point_to_pointcloud_xyzi(const unsigned char* data, uint32_t ori
 
     if (input_raw_buffer == nullptr)
     {
-        std::cout << "allocig input bfufer "<< std::endl;
         CHECK_CUDA_ERROR(cudaMallocManaged(&input_raw_buffer, raw_size));
     }
 
     if (output_pt_buffer == nullptr)
     {
-        std::cout << "allocig output bfufer "<< std::endl;
         CHECK_CUDA_ERROR(cudaMallocManaged(&output_pt_buffer, sizeof(PointXYZINormal) * orig_size));
     }
 
@@ -274,10 +272,10 @@ void deinit_buffer()
 void stop_gpu_prep()
 {
     work = false;
-    while(!stopped)
+    /*while(!stopped)
     {
         usleep(1000);
-    }
+    }*/
 
     deinit_buffer();
 }

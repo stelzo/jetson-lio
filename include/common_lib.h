@@ -264,7 +264,6 @@ bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &
     for (int j = 0; j < NUM_MATCH_POINTS; j++)
     {
         float to_check = fabs(pca_result(0) * point[j].x + pca_result(1) * point[j].y + pca_result(2) * point[j].z + pca_result(3));
-        std::cout << "to_check: " << to_check << std::endl;
         if (to_check > threshold)
         {
             return false;

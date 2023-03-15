@@ -106,12 +106,6 @@ TEST(ikdTree, nearestSearch) {
 
     EXPECT_EQ(*nearest_size, k);
 
-    std::cout << "Points before sorting:" << std::endl;
-    for (int i = 0; i < *nearest_size; i++) {
-        std::cout << i << ". Point: " << Nearest_Points[i].x << ", " << Nearest_Points[i].y << ", "
-                  << Nearest_Points[i].z << std::endl;
-    }
-
     // Sort nearest points by distance to query (Bubblesort)
     for (int i = 0; i < *nearest_size; i++) {
         for (int j = 0; j < *nearest_size - i - 1; j++) {
@@ -121,13 +115,6 @@ TEST(ikdTree, nearestSearch) {
                 Nearest_Points[j + 1] = dummy;
             }
         }
-    }
-
-    std::cout << "Points after sorting:" << std::endl;
-
-    for (int i = 0; i < *nearest_size; i++) {
-        std::cout << i << ". Point: " << Nearest_Points[i].x << ", " << Nearest_Points[i].y << ", "
-                  << Nearest_Points[i].z << std::endl;
     }
 
     // Check output

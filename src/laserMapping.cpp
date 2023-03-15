@@ -66,6 +66,8 @@
 
 #include <execution>
 
+#define DEBUG_LIMIT 20
+
 #define WITH_TIMER
 
 #include <cuda-utils.h>
@@ -744,8 +746,6 @@ int main(int argc, char **argv) {
     path.header.stamp = ros::Time::now();
     path.header.frame_id = "camera_init";
 
-    std::cout << "allocating mem" << std::endl;
-
     CHECK_CUDA_ERROR(cudaMallocManaged(&point_selected_surf, SELECTED_SURF_SIZE * sizeof(bool)));
     CHECK_CUDA_ERROR(cudaMemset(point_selected_surf, true, SELECTED_SURF_SIZE * sizeof(bool)));
 
@@ -791,12 +791,9 @@ int main(int argc, char **argv) {
     }
 
     CHECK_CUDA_ERROR(cudaMallocManaged(&Nearest_Points_sizes, normvec_size * sizeof(size_t)));
-    std::cout << "setting Nearest_Points_sizes" << std::endl;
     for (size_t i = 0; i < normvec_size; i++) {
         Nearest_Points_sizes[i] = NUM_MATCH_POINTS;
     }
-
-    std::cout << "allocated mem" << std::endl;
 
     /*** variables definition ***/
     int effect_feat_num = 0, frame_num = 0;
@@ -825,7 +822,6 @@ int main(int argc, char **argv) {
 
     double epsi[23] = {0.001};
     fill(epsi, epsi + 23, 0.001);
-    std::cout << "init dyn share" << std::endl;
 
     kf.init_dyn_share(get_f, df_dx, df_dw, h_share_model, NUM_MAX_ITERATIONS, epsi);
 
@@ -842,8 +838,6 @@ int main(int argc, char **argv) {
         cout << "~~~~" << ROOT_DIR << " file opened" << endl;
     else
         cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
-
-    std::cout << "subscriber init" << std::endl;
 
     /*** ROS subscribe initialization ***/
     ros::Subscriber sub_pcl = nh.subscribe(lid_topic, 10000, standard_pcl_cbk);
@@ -866,10 +860,11 @@ int main(int argc, char **argv) {
     // ros::AsyncSpinner spinner(0);
     // spinner.start();
     preproc_result->resize(128 * 1024);
-#ifdef USE_CUDA
     init_kernels();
-#endif
     while (status) {
+#ifdef DEBUG_LIMIT
+        static int debug_limit = 0;
+#endif
         if (flg_exit) break;
         if (sync_packages(Measures)) {
             if (flg_first_scan) {
@@ -902,7 +897,7 @@ int main(int argc, char **argv) {
                         "total/01/Process");
 #endif
 
-                    if (feats_undistort->empty() || (feats_undistort == NULL)) {
+                    if (feats_undistort->empty() || (feats_undistort == nullptr) || (feats_undistort->points.data() == nullptr)) {
                         ROS_WARN("No point, skip this scan!\n");
                         return;
                     }
@@ -1022,6 +1017,8 @@ int main(int argc, char **argv) {
                     Eigen::Quaternionf rotation;
                     Eigen::Vector3f translation;
                     publish_odometry(pubOdomAftMapped, translation, rotation);
+                    
+                    ROS_INFO_STREAM("pub odometry" << std::endl << translation);
 
 #ifdef WITH_TIMER
                     jetson_lio::Timer::Evaluate(
@@ -1050,11 +1047,20 @@ int main(int argc, char **argv) {
 #endif
                 },
                 "total");
+#ifdef DEBUG_LIMIT
+                debug_limit++;
+                if (debug_limit > DEBUG_LIMIT) {
+                    ROS_INFO_STREAM("end");
+                    break;
+                }
+#endif
         }
 
         status = ros::ok();
         ros::spinOnce();
         rate.sleep();
+
+
     }
 
     if (point_selected_surf) cudaFree(point_selected_surf);
@@ -1066,9 +1072,9 @@ int main(int argc, char **argv) {
     if (Nearest_Points) cudaFree(Nearest_Points);
     if (Nearest_Points_sizes) cudaFree(Nearest_Points_sizes);
 
-#ifdef USE_CUDA
+    ROS_INFO_STREAM("stop gpu callback...");
     stop_gpu_prep();
-#endif
+    ROS_INFO_STREAM("printing times");
     jetson_lio::Timer::PrintAll();
 
     /**************** save map ****************/

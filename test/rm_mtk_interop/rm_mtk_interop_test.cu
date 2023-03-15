@@ -105,3 +105,27 @@ TEST(rm_mtk_interop, vector3) {
     EXPECT_NEAR(t.y(), rm_casted.y, epsilon);
     EXPECT_NEAR(t.z(), rm_casted.z, epsilon);
 }
+
+TEST(rm_mtk_interop, eigen_block_cpu) {
+    Eigen::MatrixXd* h_x_p = new MatrixXd(1234, 12);
+    double data[] = {1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11};
+
+    int idx = 0;
+    jacobian_test_cpu(data, h_x_p, idx);
+
+    Eigen::MatrixXd h_x = *h_x_p;
+    delete h_x_p;
+
+    EXPECT_NEAR(data[0], h_x(idx, 0), epsilon);
+    EXPECT_NEAR(data[1], h_x(idx, 1), epsilon);
+    EXPECT_NEAR(data[2], h_x(idx, 2), epsilon);
+    EXPECT_NEAR(data[3], h_x(idx, 3), epsilon);
+    EXPECT_NEAR(data[4], h_x(idx, 4), epsilon);
+    EXPECT_NEAR(data[5], h_x(idx, 5), epsilon);
+    EXPECT_NEAR(data[6], h_x(idx, 6), epsilon);
+    EXPECT_NEAR(data[7], h_x(idx, 7), epsilon);
+    EXPECT_NEAR(data[8], h_x(idx, 8), epsilon);
+    EXPECT_NEAR(data[9], h_x(idx, 9), epsilon);
+    EXPECT_NEAR(data[10], h_x(idx, 10), epsilon);
+    EXPECT_NEAR(data[11], h_x(idx, 11), epsilon);
+}
