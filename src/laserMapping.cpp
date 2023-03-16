@@ -322,7 +322,10 @@ void lasermap_fov_segment() {
 
     points_cache_collect();
     double delete_begin = omp_get_wtime();
-    if (cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
+    if (cub_needrm.size() > 0)
+    {
+        kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
+    }
     kdtree_delete_time = omp_get_wtime() - delete_begin;
 }
 
@@ -666,10 +669,11 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
                 return;
             }
 
-            ikdtree.consistent();
-
+            ikdtree.ikd_mutex.lock();
             pthread_mutex_lock(&ikdtree.search_flag_mutex);
             ikdtree.search_mutex_counter = 1;
+
+            ikdtree.consistent();
 
             int effct_feat_num = kf_point_state_step(
                 feats_down_body, feats_down_body_size, feats_down_world, feats_down_world_size,
@@ -682,6 +686,7 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
                 ROS_WARN("No Effective Points! \n");
                 ikdtree.search_mutex_counter = 0;
                 pthread_mutex_unlock(&ikdtree.search_flag_mutex);
+                ikdtree.ikd_mutex.unlock();
                 return;
             }
 
@@ -694,6 +699,7 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
 
             ikdtree.search_mutex_counter = 0;
             pthread_mutex_unlock(&ikdtree.search_flag_mutex);
+            ikdtree.ikd_mutex.unlock();
         },
         "share modified");
 }
@@ -953,7 +959,7 @@ int main(int argc, char **argv) {
 
                     int featsFromMapNum = ikdtree.validnum();
                     kdtree_size_st = ikdtree.size();
-
+                    
                     if (feats_down_size < 5) {
                         ROS_WARN("No point, skip this scan!\n");
                         return;

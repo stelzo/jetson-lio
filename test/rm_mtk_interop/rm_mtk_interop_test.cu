@@ -7,6 +7,7 @@
 #include <common_lib.h>
 #include <math/common.h>
 #include <math/math.h>
+#include <math/matrixXxX.h>
 
 #include <iostream>
 
@@ -106,7 +107,7 @@ TEST(rm_mtk_interop, vector3) {
     EXPECT_NEAR(t.z(), rm_casted.z, epsilon);
 }
 
-TEST(rm_mtk_interop, eigen_block_cpu) {
+TEST(rm_mtk_interop, eigen_block_map_cpu) {
     Eigen::MatrixXd* h_x_p = new MatrixXd(1234, 12);
     double data[] = {1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11};
 
@@ -115,6 +116,78 @@ TEST(rm_mtk_interop, eigen_block_cpu) {
 
     Eigen::MatrixXd h_x = *h_x_p;
     delete h_x_p;
+
+    EXPECT_NEAR(data[0], h_x(idx, 0), epsilon);
+    EXPECT_NEAR(data[1], h_x(idx, 1), epsilon);
+    EXPECT_NEAR(data[2], h_x(idx, 2), epsilon);
+    EXPECT_NEAR(data[3], h_x(idx, 3), epsilon);
+    EXPECT_NEAR(data[4], h_x(idx, 4), epsilon);
+    EXPECT_NEAR(data[5], h_x(idx, 5), epsilon);
+    EXPECT_NEAR(data[6], h_x(idx, 6), epsilon);
+    EXPECT_NEAR(data[7], h_x(idx, 7), epsilon);
+    EXPECT_NEAR(data[8], h_x(idx, 8), epsilon);
+    EXPECT_NEAR(data[9], h_x(idx, 9), epsilon);
+    EXPECT_NEAR(data[10], h_x(idx, 10), epsilon);
+    EXPECT_NEAR(data[11], h_x(idx, 11), epsilon);
+}
+
+TEST(rm_mtk_interop, eigen_rm_matrixXd_interop) {
+    Eigen::MatrixXd h_x_p;
+    double data[] = {1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11};
+
+    int idx = 0;
+
+    rmagine::MatrixXd rm_h_x(1234, 12);
+    rm_h_x(idx, 0) = data[0];
+    rm_h_x(idx, 1) = data[1];
+    rm_h_x(idx, 2) = data[2];
+    rm_h_x(idx, 3) = data[3];
+    rm_h_x(idx, 4) = data[4];
+    rm_h_x(idx, 5) = data[5];
+    rm_h_x(idx, 6) = data[6];
+    rm_h_x(idx, 7) = data[7];
+    rm_h_x(idx, 8) = data[8];
+    rm_h_x(idx, 9) = data[9];
+    rm_h_x(idx, 10) = data[10];
+    rm_h_x(idx, 11) = data[11];
+
+    //h_x_p = *(reinterpret_cast<Eigen::MatrixXd*>(&rm_h_x));
+    h_x_p = rm_h_x.toEigen();
+
+    EXPECT_NEAR(data[0], h_x_p(idx, 0), epsilon);
+    EXPECT_NEAR(data[1], h_x_p(idx, 1), epsilon);
+    EXPECT_NEAR(data[2], h_x_p(idx, 2), epsilon);
+    EXPECT_NEAR(data[3], h_x_p(idx, 3), epsilon);
+    EXPECT_NEAR(data[4], h_x_p(idx, 4), epsilon);
+    EXPECT_NEAR(data[5], h_x_p(idx, 5), epsilon);
+    EXPECT_NEAR(data[6], h_x_p(idx, 6), epsilon);
+    EXPECT_NEAR(data[7], h_x_p(idx, 7), epsilon);
+    EXPECT_NEAR(data[8], h_x_p(idx, 8), epsilon);
+    EXPECT_NEAR(data[9], h_x_p(idx, 9), epsilon);
+    EXPECT_NEAR(data[10], h_x_p(idx, 10), epsilon);
+    EXPECT_NEAR(data[11], h_x_p(idx, 11), epsilon);
+
+    EXPECT_NEAR(0.0, h_x_p(idx + 1, 11), epsilon);
+}
+
+TEST(rm_mtk_interop, eigen_mat_change) {
+    Eigen::MatrixXd h_x(1234, 12);
+
+    h_x(1, 2) = 20.0;
+    EXPECT_NEAR(h_x(1, 2), 20, epsilon);
+
+    rmagine::MatrixXd mat(1234, 12);
+    mat(1, 2) = 20.0;
+
+    EXPECT_NEAR(mat.toEigen()(1, 2), 20.0, epsilon);
+}
+
+TEST(rm_mtk_interop, eigen_block_gpu) {
+    Eigen::MatrixXd h_x(1234, 12);
+    double data[] = {1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10, 1.11};
+
+    int idx = 0;
+    jacobian_test_gpu(data, 1234, 12, h_x, idx);
 
     EXPECT_NEAR(data[0], h_x(idx, 0), epsilon);
     EXPECT_NEAR(data[1], h_x(idx, 1), epsilon);
