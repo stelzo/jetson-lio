@@ -66,7 +66,7 @@
 
 #include <execution>
 
-#define DEBUG_LIMIT 20
+//#define DEBUG_LIMIT 20
 
 #define WITH_TIMER
 
@@ -456,63 +456,55 @@ bool sync_packages(MeasureGroup &meas) {
 
 int process_increments = 0;
 void map_incremental() {
-#ifdef WITH_TIMER
-    jetson_lio::Timer::Evaluate(
-        [&]() {
-#endif
-            PointVector PointToAdd;
-            PointVector PointNoNeedDownsample;
-            PointToAdd.reserve(feats_down_size);
-            PointNoNeedDownsample.reserve(feats_down_size);
-            for (int i = 0; i < feats_down_size; i++) {
-                /* transform to world frame */
-                pointBodyToWorld(&(feats_down_body[i]), &(feats_down_world[i]));
-                /* decide if need add to map */
-                if (Nearest_Points_sizes[i] != 0 && flg_EKF_inited) {
-                    bool need_add = true;
-                    BoxPointType Box_of_Point;
-                    PointType downsample_result, mid_point;
-                    mid_point.x =
-                        floor(feats_down_world[i].x / filter_size_map_min) * filter_size_map_min +
-                        0.5 * filter_size_map_min;
-                    mid_point.y =
-                        floor(feats_down_world[i].y / filter_size_map_min) * filter_size_map_min +
-                        0.5 * filter_size_map_min;
-                    mid_point.z =
-                        floor(feats_down_world[i].z / filter_size_map_min) * filter_size_map_min +
-                        0.5 * filter_size_map_min;
-                    float dist = calc_dist(feats_down_world[i], mid_point);
-                    // Nearest_Points[i].x should be Nearest_Points[i][0].x but in memory it is the
-                    // same since the dim is 1
-                    if (fabs(Nearest_Points[i + 0].x - mid_point.x) > 0.5 * filter_size_map_min &&
-                        fabs(Nearest_Points[i + 0].y - mid_point.y) > 0.5 * filter_size_map_min &&
-                        fabs(Nearest_Points[i + 0].z - mid_point.z) > 0.5 * filter_size_map_min) {
-                        PointNoNeedDownsample.push_back(feats_down_world[i]);
-                        continue;
-                    }
-                    for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++) {
-                        if (Nearest_Points_sizes[i] < NUM_MATCH_POINTS) break;
-                        if (calc_dist(Nearest_Points[i + readd_i], mid_point) < dist) {
-                            need_add = false;
-                            break;
-                        }
-                    }
-                    if (need_add) PointToAdd.push_back(feats_down_world[i]);
-                } else {
-                    PointToAdd.push_back(feats_down_world[i]);
+    PointVector PointToAdd;
+    PointVector PointNoNeedDownsample;
+    PointToAdd.reserve(feats_down_size);
+    PointNoNeedDownsample.reserve(feats_down_size);
+    for (int i = 0; i < feats_down_size; i++) {
+        /* transform to world frame */
+        pointBodyToWorld(&(feats_down_body[i]), &(feats_down_world[i]));
+        /* decide if need add to map */
+        if (Nearest_Points_sizes[i] != 0 && flg_EKF_inited) {
+            bool need_add = true;
+            BoxPointType Box_of_Point;
+            PointType downsample_result, mid_point;
+            mid_point.x =
+                floor(feats_down_world[i].x / filter_size_map_min) * filter_size_map_min +
+                0.5 * filter_size_map_min;
+            mid_point.y =
+                floor(feats_down_world[i].y / filter_size_map_min) * filter_size_map_min +
+                0.5 * filter_size_map_min;
+            mid_point.z =
+                floor(feats_down_world[i].z / filter_size_map_min) * filter_size_map_min +
+                0.5 * filter_size_map_min;
+            float dist = calc_dist(feats_down_world[i], mid_point);
+            // Nearest_Points[i].x should be Nearest_Points[i][0].x but in memory it is the
+            // same since the dim is 1
+            if (fabs(Nearest_Points[i + 0].x - mid_point.x) > 0.5 * filter_size_map_min &&
+                fabs(Nearest_Points[i + 0].y - mid_point.y) > 0.5 * filter_size_map_min &&
+                fabs(Nearest_Points[i + 0].z - mid_point.z) > 0.5 * filter_size_map_min) {
+                PointNoNeedDownsample.push_back(feats_down_world[i]);
+                continue;
+            }
+            for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++) {
+                if (Nearest_Points_sizes[i] < NUM_MATCH_POINTS) break;
+                if (calc_dist(Nearest_Points[i + readd_i], mid_point) < dist) {
+                    need_add = false;
+                    break;
                 }
             }
+            if (need_add) PointToAdd.push_back(feats_down_world[i]);
+        } else {
+            PointToAdd.push_back(feats_down_world[i]);
+        }
+    }
 
-            double st_time = omp_get_wtime();
-            add_point_size = ikdtree.Add_Points(PointToAdd, true);
-            ikdtree.Add_Points(PointNoNeedDownsample, false);
-            ikdtree.consistent();
-            add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
-            kdtree_incremental_time = omp_get_wtime() - st_time;
-#ifdef WITH_TIMER
-        },
-        "Map update");
-#endif
+    double st_time = omp_get_wtime();
+    add_point_size = ikdtree.Add_Points(PointToAdd, true);
+    ikdtree.Add_Points(PointNoNeedDownsample, false);
+    ikdtree.consistent();
+    add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
+    kdtree_incremental_time = omp_get_wtime() - st_time;
 }
 
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
@@ -668,8 +660,6 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
             if (ikdtree.size() == 0) {
                 return;
             }
-
-            ikdtree.ikd_mutex.lock();
             pthread_mutex_lock(&ikdtree.search_flag_mutex);
             ikdtree.search_mutex_counter = 1;
 
@@ -686,7 +676,6 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
                 ROS_WARN("No Effective Points! \n");
                 ikdtree.search_mutex_counter = 0;
                 pthread_mutex_unlock(&ikdtree.search_flag_mutex);
-                ikdtree.ikd_mutex.unlock();
                 return;
             }
 
@@ -699,7 +688,6 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
 
             ikdtree.search_mutex_counter = 0;
             pthread_mutex_unlock(&ikdtree.search_flag_mutex);
-            ikdtree.ikd_mutex.unlock();
         },
         "share modified");
 }
