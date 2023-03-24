@@ -68,6 +68,31 @@ private:
 class PointMetrics {
 public:
 
+    PointMetrics() {
+        setMaxIdx(0);
+    }
+
+    PointMetrics(const PointMetrics& other) {
+        this->max_idx = other.max_idx;
+        this->neighbors = other.neighbors;
+        this->selected_surfs = other.selected_surfs;
+        this->neighbor_distances = other.neighbor_distances;
+        this->planes = other.planes;
+        this->state_jacobi = other.state_jacobi;
+        this->point_jacobis = other.point_jacobis;
+        this->odom = other.odom;
+    }
+
+    void assertAll(const PointMetrics& other) {
+        assert_near_neighbors(this->neighbors, other.neighbors);
+        assert_near_selected_surfs(this->selected_surfs, other.selected_surfs);
+        assert_near_neighbor_distances(this->neighbor_distances, other.neighbor_distances);
+        assert_near_planes(this->planes, other.planes);
+        assert_near_state_jacobi(this->state_jacobi, other.state_jacobi);
+        assert_near_point_jacobis(this->point_jacobis, other.point_jacobis);
+        assert_near_odom(this->odom, other.odom);
+    }
+
     struct PlaneResult {
         bool found;
         Eigen::Matrix<float, 4, 1> equation;
@@ -154,7 +179,7 @@ public:
     /// @brief 
     /// i - 1\n
     void loadSelectedSurfs(int i, boost::filesystem::path path="surfs") {
-        neighbors.clear();
+        selected_surfs.clear();
         
         boost::filesystem::create_directory(path.root_directory());
         path += "-" + std::to_string(i) + ".txt";
@@ -334,7 +359,6 @@ public:
         }
         ifs.close();
     }
-
     
     /// @brief 
     /// i - float, float ...\n
@@ -399,8 +423,10 @@ public:
         std::ifstream ifs(path.c_str());
         while (true) {
             int idx = -1;
+            bool found;
             char idx_sep;
-            ifs >> idx >> idx_sep;
+            float x, y, z, w;
+            ifs >> idx >> idx_sep >> found >> x >> idx_sep >> y >> idx_sep >> z >> idx_sep >> w;
             if (!ifs) break;
             if (idx == -1) {
                 std::cout << "idx parse failed" << std::endl;
@@ -408,30 +434,13 @@ public:
                 return;
             }
 
-            std::string seperated_ps;
-            std::getline(ifs, seperated_ps);
-            std::vector<std::string> vals = split(seperated_ps, ',');
-            std::vector<float> distances;
+            Eigen::Matrix<float, 4, 1> equation;
+            equation(0) = x;
+            equation(1) = y;
+            equation(2) = z;
+            equation(3) = w;
 
-            for (auto& val : vals) {
-                std::stringstream sval(val);
-                float x, y, z, w;
-                bool found;
-                sval >> found >> x >> y >> z >> w;
-                if (!sval) {
-                    std::cout << "expecting bool, x, y, z, w floats" << std::endl;
-                    ifs.close();
-                    return;
-                }
-                
-                Eigen::Matrix<float, 4, 1> equation;
-                equation(0) = x;
-                equation(1) = y;
-                equation(2) = z;
-                equation(3) = w;
-                
-                setPlane(idx, found, equation);
-            }
+            setPlane(idx, found, equation);
         }
         ifs.close();
     }
@@ -455,8 +464,6 @@ public:
     }
     
     void loadStateJacobi(int i, boost::filesystem::path path="neighbor-distances") {
-        neighbors.clear();
-        
         boost::filesystem::create_directory(path.root_directory());
         path += "-" + std::to_string(i) + ".txt";
 

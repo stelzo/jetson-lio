@@ -1065,40 +1065,23 @@ int main(int argc, char** argv)
         }
         if (testing_enabled) {
             test_metrics->saveNeighbors(i, "/home/csieh/gpu-slam/neighbors-fastlio");
-            auto old_neighbors = test_metrics->neighbors;
-            test_metrics->loadNeighbors(i, "/home/csieh/gpu-slam/neighbors-fastlio");
-            test_metrics->assert_near_neighbors(old_neighbors, test_metrics->neighbors);
-
             test_metrics->saveNeighborsDistances(i, "/home/csieh/gpu-slam/neighbors-distances-fastlio");
-            auto old_neighbors_distances = test_metrics->neighbor_distances;
-            test_metrics->loadNeighborDistances(i, "/home/csieh/gpu-slam/neighbors-distances-fastlio");
-            test_metrics->assert_near_neighbor_distances(old_neighbors_distances, test_metrics->neighbor_distances);
-
             test_metrics->saveSelectedSurfs(i, "/home/csieh/gpu-slam/surfs-fastlio");
-            auto old_selected_surfs = test_metrics->selected_surfs;
-            test_metrics->loadSelectedSurfs(i, "/home/csieh/gpu-slam/surfs-fastlio");
-            test_metrics->assert_near_selected_surfs(old_selected_surfs, test_metrics->selected_surfs);
-
             test_metrics->savePlanes(i, "/home/csieh/gpu-slam/planes-fastlio");
-            auto old_planes = test_metrics->planes;
-            test_metrics->loadPlanes(i, "/home/csieh/gpu-slam/planes-fastlio");
-            test_metrics->assert_near_planes(old_planes, test_metrics->planes);
-
             test_metrics->saveStateJacobi(i, "/home/csieh/gpu-slam/state-jacobi-fastlio");
-            auto old_state_jacobi = test_metrics->state_jacobi;
-            test_metrics->loadStateJacobi(i, "/home/csieh/gpu-slam/state-jacobi-fastlio");
-            test_metrics->assert_near_state_jacobi(old_state_jacobi, test_metrics->state_jacobi);
-
             test_metrics->savePointJacobi(i, "/home/csieh/gpu-slam/point-jacobi-fastlio");
-            auto old_point_jacobi = test_metrics->point_jacobis;
-            test_metrics->loadPointJacobi(i, "/home/csieh/gpu-slam/point-jacobi-fastlio");
-            test_metrics->assert_near_point_jacobis(old_point_jacobi, test_metrics->point_jacobis);
-
             test_metrics->saveOdom(i, "/home/csieh/gpu-slam/odom-fastlio");
-            auto old_odom = test_metrics->odom;
-            test_metrics->loadOdom(i, "/home/csieh/gpu-slam/odom-fastlio");
-            test_metrics->assert_near_odom(old_odom, test_metrics->odom);
 
+            PointMetrics loaded_metrics;
+            loaded_metrics.loadNeighbors(i, "/home/csieh/gpu-slam/neighbors-fastlio");
+            loaded_metrics.loadNeighborDistances(i, "/home/csieh/gpu-slam/neighbors-distances-fastlio");
+            loaded_metrics.loadSelectedSurfs(i, "/home/csieh/gpu-slam/surfs-fastlio");
+            loaded_metrics.loadPlanes(i, "/home/csieh/gpu-slam/planes-fastlio");
+            loaded_metrics.loadStateJacobi(i, "/home/csieh/gpu-slam/state-jacobi-fastlio");
+            loaded_metrics.loadPointJacobi(i, "/home/csieh/gpu-slam/point-jacobi-fastlio");
+            loaded_metrics.loadOdom(i, "/home/csieh/gpu-slam/odom-fastlio");
+
+            test_metrics->assertAll(loaded_metrics);
             test_metrics->clear();
             i++;
         }
