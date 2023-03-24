@@ -60,6 +60,10 @@
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
 
+#include <util/BagIO.h>
+
+#define TESTING 1
+
 #define INIT_TIME           (0.1)
 #define LASER_POINT_COV     (0.001)
 #define MAXN                (720000)
@@ -630,12 +634,16 @@ void publish_path(const ros::Publisher pubPath)
     }
 }
 
+std::unique_ptr<PointMetrics> test_metrics;
+bool testing_enabled;
 void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_data)
 {
     double match_start = omp_get_wtime();
     laserCloudOri->clear(); 
     corr_normvect->clear(); 
     total_residual = 0.0; 
+
+    test_metrics->setMaxIdx(feats_down_size);
 
     /** closest surface search and residual computation **/
     #ifdef MP_EN
@@ -668,9 +676,17 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
 
         if (!point_selected_surf[i]) continue;
 
+        if (testing_enabled) {
+            test_metrics->setSelectedSurf(i, point_selected_surf[i]);
+            PointVector points_near_ = points_near;
+            test_metrics->addNeighbors(i, points_near_);
+            test_metrics->setDistances(i, pointSearchSqDis);
+        }
+
         VF(4) pabcd;
         point_selected_surf[i] = false;
-        if (esti_plane(pabcd, points_near, 0.1f))
+        bool found_plane = esti_plane_old(pabcd, points_near, 0.1f);
+        if (found_plane)
         {
             float pd2 = pabcd(0) * point_world.x + pabcd(1) * point_world.y + pabcd(2) * point_world.z + pabcd(3);
             float s = 1 - 0.9 * fabs(pd2) / sqrt(p_body.norm());
@@ -685,6 +701,10 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
                 res_last[i] = abs(pd2);
             }
         }
+
+        if (testing_enabled) {
+            test_metrics->setPlane(i, found_plane, pabcd);
+        }
     }
     
     effct_feat_num = 0;
@@ -697,6 +717,9 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
             corr_normvect->points[effct_feat_num] = normvec->points[i];
             total_residual += res_last[i];
             effct_feat_num ++;
+        }
+        if (testing_enabled) {
+            test_metrics->setSelectedSurf(i, point_selected_surf[i]);
         }
     }
 
@@ -735,18 +758,31 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         if (extrinsic_est_en)
         {
             V3D B(point_be_crossmat * s.offset_R_L_I.conjugate() * C); //s.rot.conjugate()*norm_vec);
-            ekfom_data.h_x.block<1, 12>(i,0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B), VEC_FROM_ARRAY(C);
+            ekfom_data.h_x.block<1, 12>
+            (i,0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B), VEC_FROM_ARRAY(C);
+            if (testing_enabled) {
+                test_metrics->setPointJacobi(i, {norm_p.x, norm_p.y, norm_p.z, (float)A[0], (float)A[1], (float)A[2], (float)B[0], (float)B[1], (float)B[2], (float)C[0], (float)C[1], (float)C[2]});
+            }
         }
         else
         {
             ekfom_data.h_x.block<1, 12>(i,0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
+            if (testing_enabled) {
+                test_metrics->setPointJacobi(i, {norm_p.x, norm_p.y, norm_p.z, (float)A[0], (float)A[1], (float)A[2], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+            }
         }
 
         /*** Measuremnt: distance to the closest surface/corner ***/
         ekfom_data.h(i) = -norm_p.intensity;
     }
+
+    if (testing_enabled) {
+        test_metrics->setStateJacobi(ekfom_data.h_x);
+    }
     solve_time += omp_get_wtime() - solve_start_;
 }
+
+int bag_parse_limit = 0;
 
 int main(int argc, char** argv)
 {
@@ -786,10 +822,14 @@ int main(int argc, char** argv)
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
+    nh.param<int>("testing/bag_parse_limit", bag_parse_limit, 40);
+    nh.param<bool>("testing/enabled", testing_enabled, false);
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     
     path.header.stamp    = ros::Time::now();
     path.header.frame_id ="camera_init";
+
+    test_metrics = std::make_unique<PointMetrics>();
 
     /*** variables definition ***/
     int effect_feat_num = 0, frame_num = 0;
@@ -855,6 +895,14 @@ int main(int argc, char** argv)
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
+
+    if (testing_enabled) {
+        BagParser bagfile("/home/csieh/Documents/drone_test_sample.bag", "/ouster/imu", "/ouster/points");
+        bagfile.parse(standard_pcl_cbk, imu_cbk, bag_parse_limit);
+    }
+
+    int i = 0;
+
     while (status)
     {
         if (flg_exit) break;
@@ -963,6 +1011,9 @@ int main(int argc, char** argv)
 
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
+            if (testing_enabled) {
+                test_metrics->setOdom(odomAftMapped);
+            }
 
             /*** add the feature points to map kdtree ***/
             t3 = omp_get_wtime();
@@ -1007,7 +1058,50 @@ int main(int argc, char** argv)
             }
         }
 
-        status = ros::ok();
+        if (testing_enabled) {
+            status = !lidar_buffer.empty();
+        } else {
+            status = ros::ok();
+        }
+        if (testing_enabled) {
+            test_metrics->saveNeighbors(i, "/home/csieh/gpu-slam/neighbors-fastlio");
+            auto old_neighbors = test_metrics->neighbors;
+            test_metrics->loadNeighbors(i, "/home/csieh/gpu-slam/neighbors-fastlio");
+            test_metrics->assert_near_neighbors(old_neighbors, test_metrics->neighbors);
+
+            test_metrics->saveNeighborsDistances(i, "/home/csieh/gpu-slam/neighbors-distances-fastlio");
+            auto old_neighbors_distances = test_metrics->neighbor_distances;
+            test_metrics->loadNeighborDistances(i, "/home/csieh/gpu-slam/neighbors-distances-fastlio");
+            test_metrics->assert_near_neighbor_distances(old_neighbors_distances, test_metrics->neighbor_distances);
+
+            test_metrics->saveSelectedSurfs(i, "/home/csieh/gpu-slam/surfs-fastlio");
+            auto old_selected_surfs = test_metrics->selected_surfs;
+            test_metrics->loadSelectedSurfs(i, "/home/csieh/gpu-slam/surfs-fastlio");
+            test_metrics->assert_near_selected_surfs(old_selected_surfs, test_metrics->selected_surfs);
+
+            test_metrics->savePlanes(i, "/home/csieh/gpu-slam/planes-fastlio");
+            auto old_planes = test_metrics->planes;
+            test_metrics->loadPlanes(i, "/home/csieh/gpu-slam/planes-fastlio");
+            test_metrics->assert_near_planes(old_planes, test_metrics->planes);
+
+            test_metrics->saveStateJacobi(i, "/home/csieh/gpu-slam/state-jacobi-fastlio");
+            auto old_state_jacobi = test_metrics->state_jacobi;
+            test_metrics->loadStateJacobi(i, "/home/csieh/gpu-slam/state-jacobi-fastlio");
+            test_metrics->assert_near_state_jacobi(old_state_jacobi, test_metrics->state_jacobi);
+
+            test_metrics->savePointJacobi(i, "/home/csieh/gpu-slam/point-jacobi-fastlio");
+            auto old_point_jacobi = test_metrics->point_jacobis;
+            test_metrics->loadPointJacobi(i, "/home/csieh/gpu-slam/point-jacobi-fastlio");
+            test_metrics->assert_near_point_jacobis(old_point_jacobi, test_metrics->point_jacobis);
+
+            test_metrics->saveOdom(i, "/home/csieh/gpu-slam/odom-fastlio");
+            auto old_odom = test_metrics->odom;
+            test_metrics->loadOdom(i, "/home/csieh/gpu-slam/odom-fastlio");
+            test_metrics->assert_near_odom(old_odom, test_metrics->odom);
+
+            test_metrics->clear();
+            i++;
+        }
         rate.sleep();
     }
 

@@ -222,8 +222,124 @@ float calc_dist(PointType p1, PointType p2){
     return d;
 }
 
+Vector3d calc_centroid(const PointVector& cluster)
+{
+    Vector3d sum(0, 0, 0);
+    for (size_t i = 0; i < cluster.size(); i++)
+    {
+        sum += Vector3d(cluster.at(i).x, cluster.at(i).y, cluster.at(i).z);
+    }
+
+    return sum * (1.0 / static_cast<double>(cluster.size()));
+}
+
+
+Matrix3d calc_cov(const PointVector& cluster, const Vector3d& centroid)
+{
+    double xx = 0.0; double xy = 0.0; double xz = 0.0;
+    double yy = 0.0; double yz = 0.0; double zz = 0.0;
+
+    for (size_t i = 0; i < cluster.size(); i++)
+    {
+        Vector3d r = Vector3d(cluster.at(i).x, cluster.at(i).y, cluster.at(i).z) - centroid;
+        xx += r.x() * r.x();
+        xy += r.x() * r.y();
+        xz += r.x() * r.z();
+        yy += r.y() * r.y();
+        yz += r.y() * r.z();
+        zz += r.z() * r.z();
+    }
+
+    xx /= static_cast<double>(cluster.size());
+    xy /= static_cast<double>(cluster.size());
+    xz /= static_cast<double>(cluster.size());
+    yy /= static_cast<double>(cluster.size());
+    yz /= static_cast<double>(cluster.size());
+    zz /= static_cast<double>(cluster.size());
+
+    Matrix3d cov;
+    cov(0, 0) = xx;
+    cov(0, 1) = xy;
+    cov(0, 2) = xz;
+    cov(1, 0) = xy;
+    cov(1, 1) = yy;
+    cov(1, 2) = yz;
+    cov(2, 0) = xz;
+    cov(2, 1) = yz;
+    cov(2, 2) = zz;
+
+    return cov;
+}
+
 template<typename T>
-bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &threshold)
+bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &threshold) {
+    Vector3d centroid = calc_centroid(point);
+    Matrix3d cov = calc_cov(point, centroid);
+
+    double xx = cov(0, 0); double xy = cov(0, 1); double xz = cov(0, 2);
+    double yy = cov(1, 1); double yz = cov(1, 2); double zz = cov(2, 2);
+
+    Vector3d weighted_dir(0, 0, 0);
+
+    {
+        double det_x = yy*zz - yz*yz;
+        Vector3d axis_dir(det_x, xz*yz - xy*zz, xy*yz - xz*yy);
+        double weight = det_x * det_x;
+        if (weighted_dir.dot(axis_dir) < 0.0)
+        {
+            weight = -weight;
+        }
+
+        weighted_dir += axis_dir * weight;
+    }
+
+    {
+        double det_y = xx*zz - xz*xz;
+        Vector3d axis_dir(xz*yz - xy*zz, det_y, xy*xz - yz*xx);
+        double weight = det_y * det_y;
+        if (weighted_dir.dot(axis_dir) < 0.0)
+        { 
+            weight = -weight;
+        }
+
+        weighted_dir += axis_dir * weight;
+    }
+
+    {
+        double det_z = xx*yy - xy*xy;
+        Vector3d axis_dir(xy*yz - xz*yy, xy*xz - yz*xx, det_z);
+        double weight = det_z * det_z;
+        if (weighted_dir.dot(axis_dir) < 0.0)
+        { 
+            weight = -weight;
+        }
+
+        weighted_dir += axis_dir * weight;
+    }
+
+    Vector3d normal = weighted_dir.normalized();
+
+    double d = -(normal.x() * centroid.x() + normal.y() * centroid.y() + normal.z() * centroid.z());
+
+    pca_result(0) = normal.x();
+    pca_result(1) = normal.y();
+    pca_result(2) = normal.z();
+    pca_result(3) = d;
+
+    // if any of the points is too far from the plane, return false
+    for (int j = 0; j < NUM_MATCH_POINTS; j++)
+    {
+        if (fabs(pca_result(0) * point[j].x + pca_result(1) * point[j].y + pca_result(2) * point[j].z + pca_result(3)) > threshold)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template<typename T>
+bool esti_plane_old(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &threshold)
 {
     Matrix<T, NUM_MATCH_POINTS, 3> A;
     Matrix<T, NUM_MATCH_POINTS, 1> b;
